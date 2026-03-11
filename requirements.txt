@@ -1,0 +1,9 @@
+requests 
+python-dotenv 
+pandas
+yfinance
+psycopg2-binary
+fastapi
+uvicorn
+sqlalchemy
+pydantic
