@@ -7,3 +7,4 @@ fastapi
 uvicorn
 sqlalchemy
 pydantic
+PyJWT>=2.8,<3

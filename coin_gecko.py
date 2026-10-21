@@ -5,7 +5,8 @@ import pandas as pd
 coins = 'bitcoin,ethereum'  # Thêm coin khác
 url = f'https://api.coingecko.com/api/v3/simple/price?ids={coins}&vs_currencies=usd&include_market_cap=true&include_24hr_change=true'
 
-response = requests.get(url)
+response = requests.get(url, timeout=20)
+response.raise_for_status()
 data = response.json()
 
 # Xử lý thành DataFrame
@@ -20,7 +21,8 @@ print(df)
 
 # Lấy historical data cho Bitcoin (7 ngày) và lưu riêng
 historical_url = 'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=7'
-hist_response = requests.get(historical_url)
+hist_response = requests.get(historical_url, timeout=20)
+hist_response.raise_for_status()
 hist_data = hist_response.json()
 
 hist_df = pd.DataFrame(hist_data['prices'], columns=['Timestamp', 'Price'])

@@ -2,6 +2,7 @@ import pandas as pd
 import psycopg2
 from psycopg2 import sql
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -14,13 +15,13 @@ DB_PASS = os.getenv("PASSWORD")
 DB_PORT = os.getenv("PORT")
 
 # Folder containing CSV files
-DATA_FOLDER = 'data'
+DATA_FOLDER = Path(__file__).resolve().parent / "data"
 
 def create_table_if_not_exists(conn, table_name):
     """Create table if it doesn't exist."""
     create_query = sql.SQL("""
     CREATE TABLE IF NOT EXISTS {} (
-        date DATE,
+        date DATE PRIMARY KEY,
         open NUMERIC,
         high NUMERIC,
         low NUMERIC,
@@ -32,6 +33,9 @@ def create_table_if_not_exists(conn, table_name):
     
     with conn.cursor() as cur:
         cur.execute(create_query)
+        cur.execute(sql.SQL("CREATE UNIQUE INDEX IF NOT EXISTS {} ON {} (date)").format(
+            sql.Identifier(f"{table_name}_date_unique"), sql.Identifier(table_name)
+        ))
     conn.commit()
 
 def load_csv_to_table(csv_file, table_name):
@@ -58,6 +62,9 @@ def load_csv_to_table(csv_file, table_name):
                 insert_query = sql.SQL("""
                 INSERT INTO {} (date, open, high, low, close, volume, name)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (date) DO UPDATE SET
+                    open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.low,
+                    close = EXCLUDED.close, volume = EXCLUDED.volume, name = EXCLUDED.name
                 """).format(sql.Identifier(table_name))
                 cur.execute(insert_query, (
                     row['Date'], row['Open'], row['High'], row['Low'],
@@ -67,15 +74,10 @@ def load_csv_to_table(csv_file, table_name):
         print(f"Data from {csv_file} loaded into table {table_name} successfully.")
     except Exception as e:
         conn.rollback()
-        print(f"Error loading {csv_file}: {e}")
+        raise RuntimeError(f"Error loading {csv_file}: {e}") from e
     finally:
         conn.close()
 
-# Get all CSV files in the data folder
-csv_files = [f for f in os.listdir(DATA_FOLDER) if f.endswith('.csv')]
-
-# Load each CSV into its table
-for csv_file in csv_files:
-    full_path = os.path.join(DATA_FOLDER, csv_file)
-    table_name = os.path.splitext(csv_file)[0].lower()  # Remove .csv and make lowercase
-    load_csv_to_table(full_path, table_name)
+if __name__ == "__main__":
+    for csv_file in sorted(DATA_FOLDER.glob("*_stock_data.csv")):
+        load_csv_to_table(csv_file, csv_file.stem.lower())

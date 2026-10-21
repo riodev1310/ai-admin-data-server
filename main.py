@@ -10,6 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, Column, Date, Float, String, select, desc, asc, func
 from sqlalchemy.orm import sessionmaker, Session, DeclarativeBase
+from sqlalchemy.engine import URL
+from security import install_health_probe, require_user
 
 load_dotenv()
 
@@ -19,7 +21,8 @@ DB_USER = os.getenv("USERNAME")
 DB_PASS = os.getenv("PASSWORD")
 DB_PORT = os.getenv("PORT")
 
-DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+DATABASE_URL = URL.create("postgresql+psycopg2", username=DB_USER, password=DB_PASS, host=DB_HOST,
+                          port=int(DB_PORT) if DB_PORT else None, database=DB_NAME)
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -104,7 +107,8 @@ def get_dynamic_table(table_name: str):
 
 
 # ---------- App ----------
-app = FastAPI(title="Stock Data API", description="API to fetch stock data from PostgreSQL")
+app = FastAPI(title="Stock Data API", description="API to fetch stock data from PostgreSQL", dependencies=[Depends(require_user)])
+install_health_probe(app)
 
 # cors_origins = os.getenv("CORS_ORIGINS", "*")
 # allow_origins = ["*"] if cors_origins == "*" else [o.strip() for o in cors_origins.split(",")]
@@ -129,7 +133,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # hoặc ["*"] khi dev
+    allow_origins=[origin.strip() for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3003").split(",") if origin.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -218,9 +222,9 @@ def get_stock_summary(
     if end is not None:
         stmt = stmt.where(T.date <= end)
 
-    # pull asc for stable calculations
-    stmt = stmt.order_by(asc(T.date)).limit(limit)
-    rows = db.execute(stmt).scalars().all()
+    # Take the latest points in the range, then restore chronological order.
+    stmt = stmt.order_by(desc(T.date)).limit(limit)
+    rows = list(reversed(db.execute(stmt).scalars().all()))
 
     if len(rows) == 0:
         return StockSummary(symbol=sym, start=start, end=end, points=0)

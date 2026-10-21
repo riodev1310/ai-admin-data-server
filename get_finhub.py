@@ -17,7 +17,8 @@ from_time = to_time - (365 * 24 * 60 * 60)  # 1 năm trước
 
 url = f'https://finnhub.io/api/v1/stock/candle?symbol={symbol}&resolution={resolution}&from={from_time}&to={to_time}&token={API_KEY}'
 
-response = requests.get(url)
+response = requests.get(url, timeout=20)
+response.raise_for_status()
 data = response.json()
 
 if 'c' in data and data['s'] == 'ok':  # Kiểm tra dữ liệu hợp lệ

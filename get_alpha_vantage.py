@@ -12,7 +12,8 @@ API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 symbol = 'NVDA'  # Thay bằng mã bạn muốn
 url = f'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={API_KEY}'
 
-response = requests.get(url)
+response = requests.get(url, timeout=20)
+response.raise_for_status()
 data = response.json()
 
 # Xử lý dữ liệu thành DataFrame
